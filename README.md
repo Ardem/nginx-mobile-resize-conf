@@ -12,4 +12,4 @@ Dependencies for nginx
 Configure nginx
 ========================
 
-	--with-http_image_filter_module --add-module=/path/to/nginx-let-module
+	./configure --with-http_image_filter_module --add-module=/path/to/nginx-let-module
