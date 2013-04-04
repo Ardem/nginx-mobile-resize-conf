@@ -88,9 +88,7 @@ server {
 
         location @404 {
             return 404;
-        }
-
-        
+        }   
     }
 
 # resize server
@@ -99,10 +97,10 @@ server {
 
 	# resize image
         location ~* ^/([\d\-]+)/([\d\-]+)/images/(.+)$ {           
-            alias                /opt/nginx/www/imagecache/source/$3;
-            image_filter         resize  $1 $2;
-            image_filter_buffer  5M;
-            error_page           403 404 415 500 502 503 504 = @404;
+            alias                       /opt/nginx/www/imagecache/source/$3;
+            image_filter                resize  $1 $2;
+            image_filter_buffer         5M;
+            error_page                  403 404 415 500 502 503 504 = @404;
         }
 
         location @404 {
@@ -116,10 +114,10 @@ server {
         
         # size image
         location ~* /images/(.+)$ {
-            alias                /opt/nginx/www/imagecache/source/$1;
-            image_filter         size;
-            image_filter_buffer  5M;
-            error_page           403 404 415 502 503 504 = @404;
+            alias                       /opt/nginx/www/imagecache/source/$1;
+            image_filter                size;
+            image_filter_buffer         5M;
+            error_page                  403 404 415 502 503 504 = @404;
         }
 
         location @404 {
