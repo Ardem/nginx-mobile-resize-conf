@@ -11,116 +11,115 @@ proxy_cache_path /opt/nginx/www/imagecache/cache levels=1:2 keys_zone=image-prev
 
 # frontend proxy server
 server {
-        listen       80;
-        server_name  www.imagecache.local;
+    listen       80;
+    server_name  www.imagecache.local;
 	        
-        location ~ ^/images/(.+)$ {
-            
-	    # set default vaiables
-            set                         $width 500;
-            set                         $height -;
-            set                         $percentage 80;
+    location ~ ^/images/(.+)$ {
+        # set default vaiables
+        set    $width 500;
+        set    $height -;
+        set    $percentage 80;
 
-            # get an image width from size server
-            eval $image_params {
-                    proxy_pass http://127.0.0.1:83$request_uri;
-            }
+        # get an image width from info server
+        eval $image_params {
+            proxy_pass http://127.0.0.1:83$request_uri;
+        }
 
-	    # set current image width
-            if ($image_params ~* 'width\"\: ([\d\-]+),' ) {
-                set                     $width $1;
-            }
+        # set current image width
+        if ($image_params ~* 'width\"\: ([\d\-]+),' ) {
+            set    $width $1;
+        }
 
-	    # check the user-agent for tablets
-            if ( $http_user_agent ~* "(iPad|Android)" ) {
-                set                     $percentage 50;
-            }
+        # check the user-agent for tablets
+        if ( $http_user_agent ~* "(iPad|Android)" ) {
+            set    $percentage 50;
+        }
 	    
-	    # check the user-agent for mobile devices
-            if ( $http_user_agent ~* "(iPhone|iPod|(Android & mobile))" ) {
-	        set                     $percentage 30; 
-	    }
+	# check the user-agent for mobile devices
+        if ( $http_user_agent ~* "(iPhone|iPod|(Android & mobile))" ) {
+	    set    $percentage 30; 
+	}
    
-	    # create a new width. height will increase proportionaly
-	    let                         $new_width ( $width * $percentage ) / 100;
-	    set	                        $new_height $height;
+	# create a new width. height will be changed proportionaly
+	let    $new_width ( $width * $percentage ) / 100;
+	set    $new_height $height;
     
-	    # proxy to cache server
-            proxy_pass                  http://127.0.0.1:81/$new_width/$new_height$request_uri;
-            proxy_intercept_errors      on;
-            proxy_cache                 off; 
-            error_page                  404 = /404;
-        }
-
-        # get an original image without resize
-        location ~ ^/source/ {
-            alias                       /opt/nginx/www/imagecache$request_uri;
-            error_page                  404 = /404;
-        }
-
-        # return noimage.gif in error case
-        location = /404 {
-            internal;
-            default_type                image/gif;
-            alias                       /opt/nginx/www/imagecache/noimage.gif;
-        }
-
-	# a trick for escaping nginx favicon error
-        location = /favicon.ico {
-            log_not_found off;
-        }
+        # proxy to cache server
+        proxy_pass                http://127.0.0.1:81/$new_width/$new_height$request_uri;
+        proxy_intercept_errors    on;
+        proxy_cache               off; 
+        error_page                404 = /404;
     }
 
-# cache server
-server {
-        listen       81;
-
-	# check cache or go to resize server
-        location ~ ^/([\d\-]+)/([\d\-]+)/images/ {
-            proxy_pass                  http://127.0.0.1:82$request_uri;
-            proxy_intercept_errors      on;
-            proxy_cache                 image-preview;
-            proxy_cache_key             "$request_uri";
-            proxy_cache_valid           200 30d;
-            proxy_cache_valid           any 1m;
-            error_page                  403 404 415 500 502 503 504 = @404;
-        }
-
-        location @404 {
-            return 404;
-        }   
+    # get an original image without resizing
+    location ~ ^/source/ {
+        alias         /opt/nginx/www/imagecache$request_uri;
+        error_page    404 = /404;
     }
 
-# resize server
-server {
-        listen 82;
-
-	# resize image
-        location ~* ^/([\d\-]+)/([\d\-]+)/images/(.+)$ {           
-            alias                       /opt/nginx/www/imagecache/source/$3;
-            image_filter                resize  $1 $2;
-            image_filter_buffer         5M;
-            error_page                  403 404 415 500 502 503 504 = @404;
-        }
-
-        location @404 {
-            return 404;
-        }
+    # return noimage.gif in error case
+    location = /404 {
+        internal;
+        default_type    image/gif;
+        alias           /opt/nginx/www/imagecache/noimage.gif;
     }
 
-# size server
+    # a trick for escaping nginx favicon error
+    location = /favicon.ico {
+        log_not_found off;
+    }
+}
+
+# caching server
 server {
-        listen 83;
+    listen    81;
+
+    # check cache or go to the resizing server
+    location ~ ^/([\d\-]+)/([\d\-]+)/images/ {
+        proxy_pass                http://127.0.0.1:82$request_uri;
+        proxy_intercept_errors    on;
+        proxy_cache               image-preview;
+        proxy_cache_key           "$request_uri";
+        proxy_cache_valid         200 30d;
+        proxy_cache_valid         any 1m;
+        error_page                403 404 415 500 502 503 504 = @404;
+    }
+
+    location @404 {
+        return 404;
+    }   
+}
+
+# resizing server
+server {
+    listen 82;
+
+    # resize image
+    location ~* ^/([\d\-]+)/([\d\-]+)/images/(.+)$ {           
+        alias                  /opt/nginx/www/imagecache/source/$3;
+        image_filter           resize  $1 $2;
+        image_filter_buffer    5M;
+        error_page             403 404 415 500 502 503 504 = @404;
+     }
+
+     location @404 {
+        return 404;
+     }
+}
+
+# info server
+server {
+    listen 83;
         
-        # size image
-        location ~* /images/(.+)$ {
-            alias                       /opt/nginx/www/imagecache/source/$1;
-            image_filter                size;
-            image_filter_buffer         5M;
-            error_page                  403 404 415 502 503 504 = @404;
-        }
-
-        location @404 {
-            return 404;
-        }
+    # size image
+    location ~* /images/(.+)$ {
+        alias                  /opt/nginx/www/imagecache/source/$1;
+        image_filter           size;
+        image_filter_buffer    5M;
+        error_page             403 404 415 502 503 504 = @404;
     }
+
+    location @404 {
+        return 404;
+    }
+}
